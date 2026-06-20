@@ -1,7 +1,11 @@
-# Tauri + React
+# qAI
+### Not a chatbot. An Assistant.
+> A straitforward and minimalistic AI harness.
 
-This template should help get you started developing with Tauri and React in Vite.
-
-## Recommended IDE Setup
-
-- [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+### Features (Frontend only for now, these are planned)
+- Personal context
+- Filesystem actions
+- Perfect integration with Quicknote
+- Memory
+- Skill implementation
+- Custom API and Ollama support
