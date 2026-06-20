@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
 
 const NIM_BASE_URL: &str = "https://integrate.api.nvidia.com/v1/chat/completions";
-const DEFAULT_MODEL: &str = "meta/llama3-70b-instruct";
+const DEFAULT_MODEL: &str = "meta/llama-3.3-70b-instruct";
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ChatMessage {
@@ -32,6 +32,26 @@ struct Choice {
 #[derive(Deserialize)]
 struct ChoiceMessage {
     content: String,
+}
+
+#[derive(Serialize, Clone)]
+struct TokenPayload {
+    #[serde(rename = "streamId")]
+    stream_id: String,
+    token: String,
+}
+
+#[derive(Serialize, Clone)]
+struct DonePayload {
+    #[serde(rename = "streamId")]
+    stream_id: String,
+}
+
+#[derive(Serialize, Clone)]
+struct ErrorPayload {
+    #[serde(rename = "streamId")]
+    stream_id: String,
+    message: String,
 }
 
 fn api_key() -> Result<String, String> {
@@ -75,14 +95,29 @@ pub async fn llm_chat(messages: Vec<ChatMessage>) -> Result<String, String> {
 }
 
 /// Streaming chat completion — emits "llm-token" events as chunks arrive,
-/// then "llm-done" with the full assembled text when finished.
+/// "llm-done" when finished, or "llm-error" if anything fails along the way.
+/// Every emitted payload carries `streamId` so the frontend can route events
+/// to the correct message bubble.
 #[tauri::command]
 pub async fn llm_chat_stream(
     app: AppHandle,
     stream_id: String,
     messages: Vec<ChatMessage>,
 ) -> Result<(), String> {
-    let key = api_key()?;
+    let key = match api_key() {
+        Ok(k) => k,
+        Err(e) => {
+            let _ = app.emit(
+                "llm-error",
+                ErrorPayload {
+                    stream_id: stream_id.clone(),
+                    message: e.clone(),
+                },
+            );
+            return Err(e);
+        }
+    };
+
     let client = reqwest::Client::new();
 
     let body = ChatRequest {
@@ -92,26 +127,62 @@ pub async fn llm_chat_stream(
         stream: true,
     };
 
-    let resp = client
+    let resp = match client
         .post(NIM_BASE_URL)
         .bearer_auth(key)
         .json(&body)
         .send()
         .await
-        .map_err(|e| e.to_string())?;
+    {
+        Ok(r) => r,
+        Err(e) => {
+            let msg = e.to_string();
+            let _ = app.emit(
+                "llm-error",
+                ErrorPayload {
+                    stream_id: stream_id.clone(),
+                    message: msg.clone(),
+                },
+            );
+            return Err(msg);
+        }
+    };
 
     if !resp.status().is_success() {
         let status = resp.status();
         let text = resp.text().await.unwrap_or_default();
-        return Err(format!("NIM API error {status}: {text}"));
+        let msg = format!("NIM API error {status}: {text}");
+        let _ = app.emit(
+            "llm-error",
+            ErrorPayload {
+                stream_id: stream_id.clone(),
+                message: msg.clone(),
+            },
+        );
+        return Err(msg);
     }
 
     let mut byte_stream = resp.bytes_stream();
     let mut full = String::new();
     let mut buffer = String::new();
 
-    while let Some(chunk) = byte_stream.next().await {
-        let chunk = chunk.map_err(|e| e.to_string())?;
+    loop {
+        let chunk = match byte_stream.next().await {
+            Some(Ok(c)) => c,
+            Some(Err(e)) => {
+                let msg = e.to_string();
+                let _ = app.emit(
+                    "llm-error",
+                    ErrorPayload {
+                        stream_id: stream_id.clone(),
+                        message: msg.clone(),
+                    },
+                );
+                return Err(msg);
+            }
+            None => break,
+        };
+
         buffer.push_str(&String::from_utf8_lossy(&chunk));
 
         // SSE frames are separated by double newlines
@@ -131,8 +202,11 @@ pub async fn llm_chat_stream(
                     if let Some(delta) = json["choices"][0]["delta"]["content"].as_str() {
                         full.push_str(delta);
                         let _ = app.emit(
-                            &format!("llm-token-{stream_id}"),
-                            delta.to_string(),
+                            "llm-token",
+                            TokenPayload {
+                                stream_id: stream_id.clone(),
+                                token: delta.to_string(),
+                            },
                         );
                     }
                 }
@@ -140,6 +214,12 @@ pub async fn llm_chat_stream(
         }
     }
 
-    let _ = app.emit(&format!("llm-done-{stream_id}"), full);
+    let _ = app.emit(
+        "llm-done",
+        DonePayload {
+            stream_id: stream_id.clone(),
+        },
+    );
+
     Ok(())
 }

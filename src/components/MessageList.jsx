@@ -52,6 +52,7 @@ export default function MessageList({ messages }) {
               key={msg.id}
               role={msg.role}
               content={msg.content}
+              status={msg.status}
               isLast={msg.id === lastId}
             />
           ))}
