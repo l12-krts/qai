@@ -18,9 +18,8 @@ const NAV_ITEMS = [
   { id: "settings", label: "Settings", icon: IoSettingsOutline, iconFilled: IoSettings },
 ];
 
-export default function Sidebar() {
+export default function Sidebar({ active, setActive, onNewChat }) {
   const [opened, setOpened] = useState(false);
-  const [active, setActive] = useState("home");
 
   return (
     <motion.div
@@ -84,7 +83,7 @@ export default function Sidebar() {
       <div className="flex-1" />
 
       {/* New chat */}
-      <button className="flex items-center h-10 rounded-xl px-3 text-white/50 hover:text-white active:scale-70 duration-250 transition-all">
+      <button className="flex items-center h-10 rounded-xl px-3 text-white/50 hover:text-white active:scale-70 duration-250 transition-all" onClick={() => onNewChat()}>
         <span className="w-[18px] h-[18px] flex items-center justify-center shrink-0">
           <IoAdd size={18} />
         </span>

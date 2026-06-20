@@ -2,7 +2,7 @@ import { Card, Button, Input } from "@heroui/react";
 import { IoAdd, IoArrowUp } from "react-icons/io5";
 import { motion, AnimatePresence } from "framer-motion";
 
-export default function Chatbox({ content, setContent, onSend }) {
+export default function Chatbox({ content, setContent, onSend, placeholder }) {
   const handleSend = () => {
     if (!(content.length > 0)) return;
     onSend(content);
@@ -17,7 +17,7 @@ export default function Chatbox({ content, setContent, onSend }) {
           <IoAdd className="scale-120"></IoAdd>
         </Button>
         <Input
-          placeholder="Ask Me Anything..."
+          placeholder={placeholder}
           className={"bg-surface focus:ring-0 focus:outline-none focus:ring-transparent focus:outline-transparent w-64 -translate-x-3.5"}
           value={content}
           onChange={(e) => setContent(e.target.value)}

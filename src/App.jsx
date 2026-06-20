@@ -7,22 +7,52 @@ import MessageList from "./components/MessageList";
 import BlurEdge from "./components/BlurEdge";
 import { useState, useEffect, useRef } from "react";
 import Sidebar from "./components/Sidebar";
+import SettingsMenu from "./components/SettingsMenu";
+import ChatList from "./components/ChatList";
 
 function App() {
   const [prompt, setPrompt] = useState("");
   const [messages, setMessages] = useState([]);
+  const [chats, setChats] = useState([{ name: "Python Code Problems", date: "10/5/2026" }, { name: "SQL Query", date: "8/5/2026" }])
+  const [active, setActive] = useState("home");
   const activeStreamId = useRef(null);
+  
+  const [apiUrl, setApiUrl] = useState("https://integrate.api.nvidia.com/v1/chat/completions");
+  const [apiKey, setApiKey] = useState("nvapi-xxxxxxxxxxxxxxxx");
+  const [setting1, setSetting1] = useState(false);
+  const settings = {
+    apiUrl: apiUrl,
+    setApiUrl: setApiUrl,
+    apiKey: apiKey,
+    setApiKey: setApiKey,
+    setting1: setting1,
+    setSetting1: setSetting1
+  }
+
+  const onNewChat = () => {
+    setMessages([]);
+    setActive("home");
+  }
+
+  const openChat = (chat) => {
+    // TODO: load this chat's real message history into `messages`
+    // (e.g. setMessages(chat.messages) once chats carry stored history).
+    console.log("Opening chat:", chat);
+    setActive("home");
+  }
+
+  const onDeleteChat = (chat) => {
+    // TODO: also delete any persisted history for this chat once chats are
+    // backed by real storage, not just this in-memory dummy list.
+    setChats((prev) => prev.filter((c) => c !== chat));
+  }
 
   const makeId = () =>
     typeof crypto !== "undefined" && crypto.randomUUID
       ? crypto.randomUUID()
       : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-  // Register listeners ONCE per mount. Setup is async (listen() returns a
-  // Promise), but useEffect's cleanup is synchronous — under StrictMode's
-  // mount -> cleanup -> mount double-invoke in dev, cleanup can run before
-  // the listeners have resolved. isMounted + the late-arrival branch below
-  // make sure we never end up with two live subscriptions.
+
   useEffect(() => {
     let isMounted = true;
     let unlistenFns = [];
@@ -68,7 +98,7 @@ function App() {
       if (isMounted) {
         unlistenFns = fns;
       } else {
-        // Component already unmounted before listeners resolved — clean up immediately.
+
         fns.forEach((fn) => fn());
       }
     };
@@ -82,6 +112,7 @@ function App() {
   }, []);
 
   const handleSend = (text) => {
+    if (active == "chats") {setActive("home");}
     const userMessage = { id: makeId(), role: "user", content: text };
 
     setMessages((prev) => {
@@ -119,10 +150,12 @@ function App() {
 
   return (
     <main className="w-screen h-screen bg-background relative overflow-hidden">
-      <MessageList messages={messages} />
-      <Chatbox content={prompt} setContent={setPrompt} onSend={handleSend}></Chatbox>
-      <Sidebar></Sidebar>
-      <WindowDecorations></WindowDecorations>
+      { active == "home" ? <MessageList messages={messages} /> : "" }
+      { active == "home" || active == "chats" ? <Chatbox content={prompt} setContent={setPrompt} onSend={handleSend} placeholder={ active == "home" ? "Ask Me Anything..." : "Type for a new chat..." }/> : "" }
+      { active == "settings" ? <SettingsMenu settings={settings} openChat={() => {}}/> : "" }
+      { active == "chats" ? <ChatList chats={chats} openChat={openChat} onDeleteChat={onDeleteChat} /> : "" }
+      <Sidebar active={active} setActive={setActive} onNewChat={onNewChat}/>
+      <WindowDecorations/>
     </main>
   );
 }

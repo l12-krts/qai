@@ -29,9 +29,6 @@ const bubbleVariants = {
   },
 };
 
-// Module-scope remark plugin array — created once, not on every render.
-// react-markdown checks this by reference, so a fresh array every render
-// would otherwise defeat its internal memoization.
 const REMARK_PLUGINS = [remarkGfm];
 
 const CodeBlock = memo(function CodeBlock({ language, value }) {
@@ -96,9 +93,6 @@ const CodeBlock = memo(function CodeBlock({ language, value }) {
   );
 });
 
-// Two static component maps (user / assistant), built once at module scope
-// instead of as a fresh object literal on every render. Identity stability
-// here is what lets ReactMarkdown avoid unnecessary internal work.
 function makeMarkdownComponents(isUser) {
   return {
     p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
@@ -148,8 +142,7 @@ function makeMarkdownComponents(isUser) {
       </th>
     ),
     td: ({ children }) => <td className="px-2.5 py-1.5 border-b border-white/5">{children}</td>,
-    // Block code arrives wrapped in <pre><code>...</code></pre> — render the
-    // fenced block here and let `code` below handle inline spans only.
+
     pre: ({ children }) => {
       const codeEl = children?.props;
       const className = codeEl?.className || "";
@@ -157,9 +150,7 @@ function makeMarkdownComponents(isUser) {
       const value = String(codeEl?.children ?? "").replace(/\n$/, "");
       return <CodeBlock language={match?.[1]} value={value} />;
     },
-    // With react-markdown v9+, this only ever receives genuinely inline
-    // `code` spans (block code is intercepted by `pre` above), so no
-    // need to branch on an `inline` prop — it no longer exists.
+
     code: ({ className, children }) => (
       <code
         className={`px-1.5 py-0.5 rounded-md text-[0.85em] whitespace-pre-wrap ${
@@ -173,7 +164,6 @@ function makeMarkdownComponents(isUser) {
   };
 }
 
-// Built once per role, not per render — module scope, not inside the component.
 const USER_MD_COMPONENTS = makeMarkdownComponents(true);
 const ASSISTANT_MD_COMPONENTS = makeMarkdownComponents(false);
 
@@ -213,23 +203,17 @@ const ThinkingIndicator = memo(function ThinkingIndicator() {
   );
 });
 
-// Splits text into word tokens while preserving whitespace/newlines as their
-// own tokens, so re-joining tokens reproduces the original string exactly.
+
 function tokenize(text) {
   return text.match(/\S+|\s+/g) || [];
 }
 
-// Renders text word-by-word: tokens the bubble has already shown stay static
-// (no re-animation, no markdown re-parse on every token), while newly
-// arrived word tokens fade + blur in individually. Once a word has been
-// "seen," it's folded into the stable markdown-rendered portion on the next
-// settle so the animated tail never grows unbounded.
+
 function StreamingText({ content, isUser, settled }) {
   const seenCountRef = useRef(0);
   const prevContentRef = useRef("");
 
-  // If content shrank or was replaced outright (e.g. error message swapped
-  // in), reset tracking instead of producing garbage negative slices.
+
   if (!content.startsWith(prevContentRef.current)) {
     seenCountRef.current = 0;
   }
@@ -237,9 +221,6 @@ function StreamingText({ content, isUser, settled }) {
 
   const tokens = useMemoTokens(content);
 
-  // "Settled" text (e.g. throttle already caught up, or stream is done)
-  // gets folded fully into the markdown-rendered stable portion — no
-  // lingering animated spans once the message finishes.
   const revealCount = settled ? tokens.length : Math.max(seenCountRef.current, tokens.length - 4);
   const stableTokens = tokens.slice(0, revealCount);
   const freshTokens = tokens.slice(revealCount);
@@ -353,9 +334,7 @@ const MiniControls = memo(function MiniControls({ content, role }) {
   );
 });
 
-// Updates at most ~every `intervalMs`, but always settles on the latest value
-// once updates stop (e.g. when a stream finishes, the bubble still ends up
-// showing the true final content, not a stale throttled snapshot).
+
 function useThrottledValue(value, intervalMs = 100) {
   const [throttled, setThrottled] = useState(value);
   const lastFlush = useRef(0);
@@ -374,7 +353,7 @@ function useThrottledValue(value, intervalMs = 100) {
       return;
     }
 
-    if (timeoutRef.current) return; // a flush is already scheduled
+    if (timeoutRef.current) return; 
 
     timeoutRef.current = setTimeout(() => {
       timeoutRef.current = null;
@@ -383,8 +362,7 @@ function useThrottledValue(value, intervalMs = 100) {
     }, intervalMs - elapsed);
 
     return () => {
-      // Don't clear on every value change — only on unmount. Clearing here
-      // would mean rapid token updates keep pushing the flush back forever.
+
     };
   }, [value, intervalMs]);
 
@@ -402,9 +380,6 @@ function MessageBubble({ role, content, status, isLast }) {
   const isThinking = !isUser && status === "streaming" && content === "";
   const isDone = isUser || status === "done" || status === undefined;
 
-  // User messages never change after being sent — no need to throttle those.
-  // Assistant messages stream in token-by-token, so the markdown layer only
-  // re-parses ~10x/sec instead of on every single token.
   const displayContent = useThrottledValue(content, isUser ? 0 : 100);
 
   return (
@@ -444,11 +419,6 @@ function MessageBubble({ role, content, status, isLast }) {
   );
 }
 
-// Custom comparator: only re-render a bubble when its own role/content/status/isLast
-// actually change. Without this, every bubble in the list re-renders whenever
-// ANY message updates (e.g. every streamed token), which is the main cause of
-// lag in long conversations — full markdown re-parse + syntax highlighting
-// re-run, multiplied by every bubble, on every token.
 export default memo(MessageBubble, (prev, next) =>
   prev.role === next.role &&
   prev.content === next.content &&

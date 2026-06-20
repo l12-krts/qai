@@ -58,7 +58,6 @@ fn api_key() -> Result<String, String> {
     std::env::var("NIM_API_KEY").map_err(|_| "NIM_API_KEY not set".to_string())
 }
 
-/// Non-streaming chat completion — returns the full reply at once.
 #[tauri::command]
 pub async fn llm_chat(messages: Vec<ChatMessage>) -> Result<String, String> {
     let key = api_key()?;
@@ -94,10 +93,6 @@ pub async fn llm_chat(messages: Vec<ChatMessage>) -> Result<String, String> {
         .unwrap_or_default())
 }
 
-/// Streaming chat completion — emits "llm-token" events as chunks arrive,
-/// "llm-done" when finished, or "llm-error" if anything fails along the way.
-/// Every emitted payload carries `streamId` so the frontend can route events
-/// to the correct message bubble.
 #[tauri::command]
 pub async fn llm_chat_stream(
     app: AppHandle,
